@@ -37,16 +37,14 @@ const TEST_VERIFICATION_CODE = "123456";
 
 // Initialize reCAPTCHA verifier
 window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-    callback: function(response) {
+    size: 'invisible',
+    callback: () => {
         // reCAPTCHA solved
-        console.log('reCAPTCHA verified');
     }
 });
 
 // Store reCAPTCHA widget ID
-window.recaptchaVerifier.render().then(function(widgetId) {
-    window.recaptchaWidgetId = widgetId;
-});
+window.recaptchaWidgetId = null;
 
 // Function to reset reCAPTCHA
 function resetRecaptcha() {
@@ -64,63 +62,50 @@ function resetRecaptcha() {
 async function signInWithGoogle() {
     try {
         const provider = new GoogleAuthProvider();
-        provider.setCustomParameters({
-            prompt: 'select_account'
-        });
+        provider.addScope('https://www.googleapis.com/auth/userinfo.email');
+        provider.addScope('https://www.googleapis.com/auth/userinfo.profile');
         
         const result = await signInWithPopup(auth, provider);
-        
-        // Get Google Access Token
-        const credential = GoogleAuthProvider.credentialFromResult(result);
-        const token = credential.accessToken;
-        
-        // Get user info
         const user = result.user;
+        const credential = result.credential;
         
         // Get additional user info
-        const additionalUserInfo = getAdditionalUserInfo(result);
+        const additionalUserInfo = result.additionalUserInfo;
         
-        console.log('Google login successful:', {
-            user,
-            token,
-            additionalUserInfo
+        // Save user data to Firestore
+        await getDoc(doc(db, 'users', user.uid)).then(async (userDoc) => {
+            if (!userDoc.exists()) {
+                await setDoc(doc(db, 'users', user.uid), {
+                    email: user.email,
+                    displayName: user.displayName,
+                    photoURL: user.photoURL,
+                    createdAt: serverTimestamp(),
+                    lastLogin: serverTimestamp(),
+                    provider: 'google',
+                    isNewUser: additionalUserInfo.isNewUser
+                });
+            } else {
+                // Update last login time
+                await updateDoc(doc(db, 'users', user.uid), {
+                    lastLogin: serverTimestamp()
+                });
+            }
         });
         
-        // Save user data to Firestore if new user
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (!userDoc.exists()) {
-            await setDoc(doc(db, 'users', user.uid), {
-                name: user.displayName,
-                email: user.email,
-                photoURL: user.photoURL,
-                createdAt: serverTimestamp(),
-                lastLogin: serverTimestamp(),
-                provider: 'google'
-            });
-        } else {
-            // Update last login time
-            await updateDoc(doc(db, 'users', user.uid), {
-                lastLogin: serverTimestamp()
-            });
-        }
+        console.log('Google Sign In Success:', {
+            user: user.email,
+            isNewUser: additionalUserInfo.isNewUser,
+            profile: additionalUserInfo.profile
+        });
         
         return user;
     } catch (error) {
-        console.error('Error signing in with Google:', error);
-        
-        // Handle specific error cases
-        const errorCode = error.code;
-        const errorMessage = error.message;
-        const email = error.customData?.email;
-        const credential = GoogleAuthProvider.credentialFromError(error);
-        
-        console.error('Error details:', {
-            errorCode,
-            errorMessage,
-            email,
-            credential
+        console.error('Google Sign In Error:', {
+            code: error.code,
+            message: error.message,
+            email: error.email,
+            credential: error.credential
         });
-        
         throw error;
     }
 }
@@ -129,31 +114,44 @@ async function signInWithGoogle() {
 async function sendPhoneOTP(phoneNumber) {
     try {
         const appVerifier = window.recaptchaVerifier;
-        // Use test phone number in testing mode
-        const numberToUse = auth.settings.appVerificationDisabledForTesting ? TEST_PHONE_NUMBER : phoneNumber;
-        const confirmationResult = await signInWithPhoneNumber(auth, numberToUse, appVerifier);
+        const confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, appVerifier);
         window.confirmationResult = confirmationResult;
-        return confirmationResult.verificationId;
+        return confirmationResult;
     } catch (error) {
-        console.error('Error sending phone OTP:', error);
+        console.error('Phone OTP Error:', error);
         resetRecaptcha(); // Reset reCAPTCHA on error
         throw error;
     }
 }
 
-async function verifyPhoneOTP(verificationId, otp) {
+async function verifyPhoneOTP(code) {
     try {
         if (!window.confirmationResult) {
             throw new Error('OTP पठाइएको छैन। कृपया पहिले OTP पठाउनुहोस्।');
         }
 
-        // Use test verification code in testing mode
-        const codeToUse = auth.settings.appVerificationDisabledForTesting ? TEST_VERIFICATION_CODE : otp;
-        const result = await window.confirmationResult.confirm(codeToUse);
-        console.log('OTP सत्यापन सफल:', result.user);
-        return result.user;
+        const result = await window.confirmationResult.confirm(code);
+        const user = result.user;
+        
+        // Save user data to Firestore
+        await getDoc(doc(db, 'users', user.uid)).then(async (userDoc) => {
+            if (!userDoc.exists()) {
+                await setDoc(doc(db, 'users', user.uid), {
+                    phoneNumber: user.phoneNumber,
+                    lastLogin: serverTimestamp(),
+                    provider: 'phone'
+                });
+            } else {
+                await updateDoc(doc(db, 'users', user.uid), {
+                    phoneNumber: user.phoneNumber,
+                    lastLogin: serverTimestamp()
+                });
+            }
+        });
+        
+        return user;
     } catch (error) {
-        console.error('Error verifying phone OTP:', error);
+        console.error('Phone OTP Verification Error:', error);
         throw error;
     }
 }
@@ -162,22 +160,23 @@ async function verifyPhoneOTP(verificationId, otp) {
 async function sendEmailOTP(email) {
     try {
         const actionCodeSettings = {
-            url: window.location.origin + '/login.html',
+            url: 'https://knownstranger01.github.io/PersonalIncomeExpensesTracker/login.html',
             handleCodeInApp: true,
             iOS: {
-                bundleId: 'com.expensetracker.ios'
+                bundleId: 'com.example.ios'
             },
             android: {
-                packageName: 'com.expensetracker.android',
+                packageName: 'com.example.android',
                 installApp: true,
                 minimumVersion: '12'
-            }
+            },
+            dynamicLinkDomain: 'example.page.link'
         };
         
         await sendSignInLinkToEmail(auth, email, actionCodeSettings);
         return true;
     } catch (error) {
-        console.error('Error sending email OTP:', error);
+        console.error('Email OTP Error:', error);
         throw error;
     }
 }
@@ -185,17 +184,26 @@ async function sendEmailOTP(email) {
 async function verifyEmailOTP(email, password) {
     try {
         const result = await signInWithEmailAndPassword(auth, email, password);
+        const user = result.user;
         
         // Save user data to Firestore
-        await setDoc(doc(db, 'users', result.user.uid), {
-            email: email,
-            lastLogin: serverTimestamp(),
-            provider: 'email'
-        }, { merge: true });
+        await getDoc(doc(db, 'users', user.uid)).then(async (userDoc) => {
+            if (!userDoc.exists()) {
+                await setDoc(doc(db, 'users', user.uid), {
+                    email: user.email,
+                    lastLogin: serverTimestamp(),
+                    provider: 'email'
+                });
+            } else {
+                await updateDoc(doc(db, 'users', user.uid), {
+                    lastLogin: serverTimestamp()
+                });
+            }
+        });
         
-        return result.user;
+        return user;
     } catch (error) {
-        console.error('Error verifying email OTP:', error);
+        console.error('Email OTP Verification Error:', error);
         throw error;
     }
 }
@@ -204,19 +212,33 @@ async function verifyEmailOTP(email, password) {
 async function registerWithEmail(email, password, name) {
     try {
         const result = await createUserWithEmailAndPassword(auth, email, password);
+        const user = result.user;
         
-        // Save user data to Firestore
-        await setDoc(doc(db, 'users', result.user.uid), {
-            name: name,
-            email: email,
-            createdAt: serverTimestamp(),
-            lastLogin: serverTimestamp(),
-            provider: 'email'
+        // Update profile
+        await user.updateProfile({
+            displayName: name
         });
         
-        return result.user;
+        // Save user data to Firestore
+        await getDoc(doc(db, 'users', user.uid)).then(async (userDoc) => {
+            if (!userDoc.exists()) {
+                await setDoc(doc(db, 'users', user.uid), {
+                    email: user.email,
+                    displayName: name,
+                    createdAt: serverTimestamp(),
+                    lastLogin: serverTimestamp(),
+                    provider: 'email'
+                });
+            } else {
+                await updateDoc(doc(db, 'users', user.uid), {
+                    lastLogin: serverTimestamp()
+                });
+            }
+        });
+        
+        return user;
     } catch (error) {
-        console.error('Error registering with email:', error);
+        console.error('Email Registration Error:', error);
         throw error;
     }
 }
@@ -235,13 +257,23 @@ async function registerWithPhone(phoneNumber, name) {
 // Complete Phone Registration Function
 async function completePhoneRegistration(verificationId, otp, name) {
     try {
-        const user = await verifyPhoneOTP(verificationId, otp);
+        const user = await verifyPhoneOTP(otp);
         
         // Save user data to Firestore
-        await setDoc(doc(db, 'users', user.uid), {
-            name: name,
-            phoneNumber: user.phoneNumber,
-            createdAt: serverTimestamp()
+        await getDoc(doc(db, 'users', user.uid)).then(async (userDoc) => {
+            if (!userDoc.exists()) {
+                await setDoc(doc(db, 'users', user.uid), {
+                    name: name,
+                    phoneNumber: user.phoneNumber,
+                    createdAt: serverTimestamp()
+                });
+            } else {
+                await updateDoc(doc(db, 'users', user.uid), {
+                    name: name,
+                    phoneNumber: user.phoneNumber,
+                    lastLogin: serverTimestamp()
+                });
+            }
         });
         
         return user;
