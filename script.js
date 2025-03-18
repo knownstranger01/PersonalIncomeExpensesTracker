@@ -10,6 +10,7 @@ const totalExpenses = document.getElementById('totalExpenses');
 const monthlyExpenses = document.getElementById('monthlyExpenses');
 const logoutBtn = document.getElementById('logoutBtn');
 const userName = document.getElementById('userName');
+const googleLoginBtn = document.getElementById('googleLoginBtn');
 
 // Tab Switching
 tabBtns.forEach(btn => {
@@ -219,4 +220,17 @@ firebase.auth().onAuthStateChanged((user) => {
             window.location.href = 'login.html';
         }
     }
-}); 
+});
+
+// Google Login
+if (googleLoginBtn) {
+    googleLoginBtn.addEventListener('click', async () => {
+        try {
+            await window.authFunctions.signInWithGoogle();
+            window.location.href = 'index.html';
+        } catch (error) {
+            console.error('Google login error:', error);
+            alert('Google लगइनमा त्रुटि भयो: ' + error.message);
+        }
+    });
+} 

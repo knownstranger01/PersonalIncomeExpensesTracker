@@ -5,10 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Personal Expense Tracker - Login</title>
     <link rel="stylesheet" href="styles.css">
-    <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/9.x.x/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.x.x/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.x.x/firebase-firestore-compat.js"></script>
 </head>
 <body>
     <div class="container">
@@ -16,104 +12,77 @@
             <h1>Personal Expense Tracker</h1>
             
             <!-- Google Login Button -->
-            <div class="google-login">
-                <button id="googleLoginBtn" class="google-btn">
-                    <img src="https://www.google.com/favicon.ico" alt="Google Icon">
-                    Continue with Google
-                </button>
-            </div>
-
+            <button id="googleLoginBtn" class="google-btn">
+                <img src="https://www.google.com/favicon.ico" alt="Google">
+                Continue with Google
+            </button>
+            
             <div class="divider">
                 <span>or</span>
             </div>
-
+            
+            <!-- Login Form -->
+            <div id="loginForm" class="auth-form">
+                <h2>Login</h2>
+                <form>
+                    <div class="form-group">
+                        <label for="loginPhone">Phone Number</label>
+                        <input type="tel" id="loginPhone" required placeholder="+91">
+                    </div>
+                    <button type="submit">Send OTP</button>
+                </form>
+                <div id="loginOTP" class="otp-form hidden">
+                    <div class="form-group">
+                        <label for="loginOTPInput">Enter OTP</label>
+                        <input type="text" id="loginOTPInput" required>
+                    </div>
+                    <button id="verifyLoginOTP">Verify OTP</button>
+                </div>
+            </div>
+            
+            <!-- Register Form -->
+            <div id="registerForm" class="auth-form hidden">
+                <h2>Register</h2>
+                <form>
+                    <div class="form-group">
+                        <label for="registerName">Full Name</label>
+                        <input type="text" id="registerName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="registerPhone">Phone Number</label>
+                        <input type="tel" id="registerPhone" required placeholder="+91">
+                    </div>
+                    <button type="submit">Send OTP</button>
+                </form>
+                <div id="registerOTP" class="otp-form hidden">
+                    <div class="form-group">
+                        <label for="registerOTPInput">Enter OTP</label>
+                        <input type="text" id="registerOTPInput" required>
+                    </div>
+                    <button id="verifyRegisterOTP">Verify OTP</button>
+                </div>
+            </div>
+            
+            <!-- Tab Buttons -->
             <div class="auth-tabs">
                 <button class="tab-btn active" data-tab="login">Login</button>
                 <button class="tab-btn" data-tab="register">Register</button>
             </div>
-
-            <!-- Login Form -->
-            <div class="auth-form" id="loginForm">
-                <h2>Login</h2>
-                <form>
-                    <div class="form-group">
-                        <label for="loginEmail">Email:</label>
-                        <input type="email" id="loginEmail" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="loginPassword">Password:</label>
-                        <input type="password" id="loginPassword" required>
-                    </div>
-                    <button type="submit">Login</button>
-                </form>
-
-                <div class="divider">
-                    <span>or</span>
-                </div>
-
-                <div class="phone-login">
-                    <div class="form-group">
-                        <label for="loginPhone">Phone Number:</label>
-                        <input type="tel" id="loginPhone" required>
-                    </div>
-                    <button type="button" id="sendLoginOTP">Send OTP</button>
-                </div>
-
-                <div id="loginOTP" class="otp-section hidden">
-                    <div class="form-group">
-                        <label for="loginOTPInput">Enter OTP:</label>
-                        <input type="text" id="loginOTPInput" maxlength="6" required>
-                    </div>
-                    <button type="button" id="verifyLoginOTP">Verify OTP</button>
-                </div>
-            </div>
-
-            <!-- Register Form -->
-            <div class="auth-form hidden" id="registerForm">
-                <h2>Register</h2>
-                <form>
-                    <div class="form-group">
-                        <label for="registerName">Full Name:</label>
-                        <input type="text" id="registerName" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="registerEmail">Email:</label>
-                        <input type="email" id="registerEmail" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="registerPassword">Password:</label>
-                        <input type="password" id="registerPassword" required>
-                    </div>
-                    <button type="submit">Register</button>
-                </form>
-
-                <div class="divider">
-                    <span>or</span>
-                </div>
-
-                <div class="phone-register">
-                    <div class="form-group">
-                        <label for="registerPhone">Phone Number:</label>
-                        <input type="tel" id="registerPhone" required>
-                    </div>
-                    <button type="button" id="sendRegisterOTP">Send OTP</button>
-                </div>
-
-                <div id="registerOTP" class="otp-section hidden">
-                    <div class="form-group">
-                        <label for="registerOTPInput">Enter OTP:</label>
-                        <input type="text" id="registerOTPInput" maxlength="6" required>
-                    </div>
-                    <button type="button" id="verifyRegisterOTP">Verify OTP</button>
-                </div>
-            </div>
+            
+            <!-- reCAPTCHA Container -->
+            <div id="recaptcha-container"></div>
         </div>
     </div>
 
-    <!-- reCAPTCHA container -->
-    <div id="recaptcha-container"></div>
-
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    
+    <!-- Firebase Config -->
     <script src="firebase-config.js"></script>
+    
+    <!-- App Scripts -->
     <script src="script.js"></script>
 </body>
 </html> 
